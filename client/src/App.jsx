@@ -31,6 +31,7 @@ const numericFields = new Set([
   'vacancyRate',
   'neighborhoodScore'
 ]);
+const apiBases = ['', 'http://localhost:5001', 'http://localhost:5002', 'http://localhost:5003'];
 
 function Field({ label, children }) {
   return (
@@ -78,17 +79,37 @@ function App() {
     setError('');
 
     try {
-      const response = await fetch('/api/analyze-property', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
-      });
+      let analysis;
+      let lastError;
 
-      if (!response.ok) {
-        throw new Error('The analysis service returned an error.');
+      for (const baseUrl of apiBases) {
+        try {
+          const response = await fetch(`${baseUrl}/api/analyze-property`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(form)
+          });
+
+          if (response.status === 400) {
+            const details = await response.json();
+            lastError = new Error(details.errors?.join(' ') || details.message || 'The analysis request is invalid.');
+            break;
+          }
+
+          if (response.ok) {
+            analysis = await response.json();
+            break;
+          }
+        } catch (requestError) {
+          lastError = requestError;
+        }
       }
 
-      setResult(await response.json());
+      if (!analysis) {
+        throw lastError || new Error('The analysis service is unavailable.');
+      }
+
+      setResult(analysis);
     } catch (analysisError) {
       setError(analysisError.message);
     } finally {
