@@ -125,9 +125,13 @@ Numeric deal inputs are validated before analysis. Invalid, missing, `NaN`, `Inf
 
 ## Screenshot Section
 
-![AI Property Decision Assistant home screen](screenshots/app-home.png)
+<p>
+  <img src="./screenshots/app-home.png" alt="AI Property Decision Assistant home screen" width="720">
+</p>
 
-![AI Property Decision Assistant results view](screenshots/results-view.png)
+<p>
+  <img src="./screenshots/results-view.png" alt="AI Property Decision Assistant analyzed results view" width="720">
+</p>
 
 Screenshots are stored in the `screenshots/` folder.
 
