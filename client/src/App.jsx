@@ -5,18 +5,32 @@ const initialForm = {
   address: '742 Magnolia Ave, Tampa, FL',
   propertyType: 'Single-family rental',
   purchasePrice: 365000,
+  estimatedValue: 385000,
   downPayment: 73000,
-  loanRate: 6.75,
-  loanYears: 30,
+  interestRate: 6.75,
+  loanTermYears: 30,
   monthlyRent: 2850,
   monthlyExpenses: 920,
-  repairs: 18000,
+  repairCost: 18000,
+  vacancyRate: 6,
   neighborhoodScore: 78,
   riskTolerance: 'Moderate',
   goal: 'Balanced cash flow and appreciation'
 };
 
 const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+const numericFields = new Set([
+  'purchasePrice',
+  'estimatedValue',
+  'downPayment',
+  'interestRate',
+  'loanTermYears',
+  'monthlyRent',
+  'monthlyExpenses',
+  'repairCost',
+  'vacancyRate',
+  'neighborhoodScore'
+]);
 
 function Field({ label, children }) {
   return (
@@ -51,10 +65,10 @@ function App() {
   }, [form.purchasePrice, form.downPayment]);
 
   const update = (event) => {
-    const { name, value, type } = event.target;
+    const { name, value } = event.target;
     setForm((current) => ({
       ...current,
-      [name]: type === 'number' || type === 'range' ? Number(value) : value
+      [name]: numericFields.has(name) ? Number(value) : value
     }));
   };
 
@@ -132,14 +146,17 @@ function App() {
             <Field label="Purchase price">
               <input name="purchasePrice" type="number" min="0" value={form.purchasePrice} onChange={update} />
             </Field>
+            <Field label="Estimated value">
+              <input name="estimatedValue" type="number" min="0" value={form.estimatedValue} onChange={update} />
+            </Field>
             <Field label="Down payment">
               <input name="downPayment" type="number" min="0" value={form.downPayment} onChange={update} />
             </Field>
             <Field label="Loan rate (%)">
-              <input name="loanRate" type="number" min="0" step="0.01" value={form.loanRate} onChange={update} />
+              <input name="interestRate" type="number" min="0" step="0.01" value={form.interestRate} onChange={update} />
             </Field>
             <Field label="Loan term">
-              <select name="loanYears" value={form.loanYears} onChange={update}>
+              <select name="loanTermYears" value={form.loanTermYears} onChange={update}>
                 <option value="15">15 years</option>
                 <option value="20">20 years</option>
                 <option value="30">30 years</option>
@@ -152,7 +169,10 @@ function App() {
               <input name="monthlyExpenses" type="number" min="0" value={form.monthlyExpenses} onChange={update} />
             </Field>
             <Field label="Repairs / upfront capex">
-              <input name="repairs" type="number" min="0" value={form.repairs} onChange={update} />
+              <input name="repairCost" type="number" min="0" value={form.repairCost} onChange={update} />
+            </Field>
+            <Field label="Vacancy rate (%)">
+              <input name="vacancyRate" type="number" min="0" max="100" step="0.1" value={form.vacancyRate} onChange={update} />
             </Field>
             <Field label="Risk tolerance">
               <select name="riskTolerance" value={form.riskTolerance} onChange={update}>

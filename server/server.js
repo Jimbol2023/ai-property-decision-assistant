@@ -19,7 +19,10 @@ app.use('/api', propertyRoutes);
 
 app.use((error, _request, response, _next) => {
   console.error(error);
-  response.status(500).json({ message: 'Unexpected server error' });
+  response.status(error.statusCode || 500).json({
+    message: error.statusCode ? error.message : 'Unexpected server error',
+    errors: error.errors
+  });
 });
 
 app.listen(port, () => {

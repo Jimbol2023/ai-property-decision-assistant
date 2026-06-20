@@ -1,7 +1,3 @@
-function money(value) {
-  return Number.isFinite(Number(value)) ? Number(value) : 0;
-}
-
 function round(value, digits = 1) {
   return Number.parseFloat(value.toFixed(digits));
 }
@@ -14,22 +10,95 @@ function monthlyMortgage(principal, annualRate, years) {
   return principal * (monthlyRate * (1 + monthlyRate) ** months) / ((1 + monthlyRate) ** months - 1);
 }
 
+export class ValidationError extends Error {
+  constructor(errors) {
+    super('Invalid property analysis request');
+    this.name = 'ValidationError';
+    this.statusCode = 400;
+    this.errors = errors;
+  }
+}
+
+const numericRules = {
+  purchasePrice: { min: 1000, max: 100000000 },
+  estimatedValue: { min: 1000, max: 100000000 },
+  repairCost: { min: 0, max: 10000000 },
+  interestRate: { min: 0, max: 30 },
+  loanTermYears: { min: 1, max: 40 },
+  monthlyRent: { min: 0, max: 1000000 },
+  monthlyExpenses: { min: 0, max: 1000000 },
+  vacancyRate: { min: 0, max: 100 }
+};
+
+function validateNumber(input, field, { min, max }) {
+  const value = input[field];
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return { value: null, error: `${field} must be a finite number.` };
+  }
+  if (value < min || value > max) {
+    return { value: null, error: `${field} must be between ${min} and ${max}.` };
+  }
+  return { value, error: null };
+}
+
+export function validatePropertyInput(input = {}) {
+  const errors = [];
+  const values = {};
+
+  for (const [field, rule] of Object.entries(numericRules)) {
+    const result = validateNumber(input, field, rule);
+    if (result.error) {
+      errors.push(result.error);
+    } else {
+      values[field] = result.value;
+    }
+  }
+
+  const downPaymentResult = validateNumber(input, 'downPayment', {
+    min: 0,
+    max: values.purchasePrice ?? 100000000
+  });
+  if (downPaymentResult.error) {
+    errors.push('downPayment must be a finite number between 0 and purchasePrice.');
+  } else {
+    values.downPayment = downPaymentResult.value;
+  }
+
+  if (
+    Number.isFinite(values.downPayment)
+    && Number.isFinite(values.purchasePrice)
+    && values.downPayment > values.purchasePrice
+  ) {
+    errors.push('downPayment cannot be greater than purchasePrice.');
+  }
+
+  if (errors.length > 0) {
+    throw new ValidationError(errors);
+  }
+
+  return values;
+}
+
 export function buildPropertyDecision(input) {
-  const purchasePrice = money(input.purchasePrice);
-  const downPayment = money(input.downPayment);
+  const validated = validatePropertyInput(input);
+  const purchasePrice = validated.purchasePrice;
+  const estimatedValue = validated.estimatedValue;
+  const downPayment = validated.downPayment;
   const loanAmount = Math.max(purchasePrice - downPayment, 0);
-  const repairs = money(input.repairs);
-  const monthlyRent = money(input.monthlyRent);
-  const monthlyExpenses = money(input.monthlyExpenses);
-  const loanYears = Number(input.loanYears) || 30;
-  const loanRate = Number(input.loanRate) || 0;
+  const repairCost = validated.repairCost;
+  const monthlyRent = validated.monthlyRent;
+  const monthlyExpenses = validated.monthlyExpenses;
+  const vacancyRate = validated.vacancyRate;
+  const loanYears = validated.loanTermYears;
+  const loanRate = validated.interestRate;
   const neighborhoodScore = Math.max(0, Math.min(100, Number(input.neighborhoodScore) || 0));
+  const effectiveMonthlyRent = monthlyRent * (1 - vacancyRate / 100);
 
   const mortgage = monthlyMortgage(loanAmount, loanRate, loanYears);
-  const monthlyCashFlow = monthlyRent - monthlyExpenses - mortgage;
-  const annualNoi = Math.max((monthlyRent - monthlyExpenses) * 12, 0);
-  const totalCashInvested = Math.max(downPayment + repairs, 1);
-  const capRate = purchasePrice > 0 ? (annualNoi / purchasePrice) * 100 : 0;
+  const monthlyCashFlow = effectiveMonthlyRent - monthlyExpenses - mortgage;
+  const annualNoi = Math.max((effectiveMonthlyRent - monthlyExpenses) * 12, 0);
+  const totalCashInvested = Math.max(downPayment + repairCost, 1);
+  const capRate = estimatedValue > 0 ? (annualNoi / estimatedValue) * 100 : 0;
   const cashOnCashReturn = (monthlyCashFlow * 12 / totalCashInvested) * 100;
   const equityPercent = purchasePrice > 0 ? (downPayment / purchasePrice) * 100 : 0;
 
@@ -39,7 +108,8 @@ export function buildPropertyDecision(input) {
   score += Math.min(Math.max((capRate - 4) * 4, -12), 18);
   score += Math.min(Math.max((neighborhoodScore - 50) / 2.7, -16), 16);
   score += equityPercent >= 20 ? 6 : -4;
-  score -= repairs > purchasePrice * 0.08 ? 5 : 0;
+  score -= repairCost > purchasePrice * 0.08 ? 5 : 0;
+  score -= vacancyRate > 12 ? 4 : 0;
 
   const normalizedScore = Math.max(0, Math.min(100, Math.round(score)));
   const recommendation = normalizedScore >= 72 ? 'Strong Buy' : normalizedScore >= 55 ? 'Watch Closely' : 'Pass';
@@ -66,6 +136,8 @@ export function buildPropertyDecision(input) {
       cashOnCashReturn: round(cashOnCashReturn),
       capRate: round(capRate),
       equityPercent: round(equityPercent),
+      vacancyRate,
+      estimatedValue,
       neighborhoodScore
     },
     risks,

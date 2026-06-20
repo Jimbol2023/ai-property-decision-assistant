@@ -8,6 +8,7 @@ A full-stack property underwriting assistant that helps investors decide whether
 - Decision score with Strong Buy, Watch Closely, or Pass guidance.
 - Cash flow, cap rate, cash-on-cash return, mortgage estimate, risk notes, and next steps.
 - Express API with health and property analysis endpoints.
+- Server-side validation rejects unsafe or impossible deal assumptions with a 400 response.
 - Optional OpenAI enhancement without making the app dependent on paid credentials.
 
 ## Tech Stack
@@ -38,6 +39,15 @@ npm run dev
 
 The client runs at `http://localhost:5173` and proxies API calls to `http://localhost:5000`.
 
+## Production Hosting
+
+This project uses split hosting:
+
+- `npm start` starts the backend API only.
+- The frontend should be built with `npm run build` and hosted separately from `client/dist` on a static host.
+- The API should be deployed separately as a Node service running the Express server in `server/`.
+- Configure the frontend host to send API requests to the deployed Node API URL.
+
 ## API
 
 ### `GET /api/health`
@@ -53,17 +63,21 @@ Example request:
   "address": "742 Magnolia Ave, Tampa, FL",
   "propertyType": "Single-family rental",
   "purchasePrice": 365000,
+  "estimatedValue": 385000,
   "downPayment": 73000,
-  "loanRate": 6.75,
-  "loanYears": 30,
+  "interestRate": 6.75,
+  "loanTermYears": 30,
   "monthlyRent": 2850,
   "monthlyExpenses": 920,
-  "repairs": 18000,
+  "repairCost": 18000,
+  "vacancyRate": 6,
   "neighborhoodScore": 78,
   "riskTolerance": "Moderate",
   "goal": "Balanced cash flow and appreciation"
 }
 ```
+
+Numeric deal inputs are validated before analysis. Invalid, missing, `NaN`, `Infinity`, negative, out-of-range, or impossible values return a clear `400` response instead of producing unsafe metrics.
 
 ## Environment
 
@@ -83,7 +97,7 @@ The app works without `OPENAI_API_KEY`; the server returns local deterministic a
 ```bash
 npm run dev        # server and client together
 npm run build      # build the React client
-npm run start      # start the Express server
+npm run start      # start the Express API only
 npm run test       # run server unit tests
 ```
 

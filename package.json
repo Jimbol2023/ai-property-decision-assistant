@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "description": "AI-assisted property investment decision tool with a React + Vite client and Node + Express API.",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "install:all": "npm --prefix client install && npm --prefix server install",
     "dev": "concurrently \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
