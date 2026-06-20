@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { AlertTriangle, Banknote, BarChart3, CheckCircle2, Home, Loader2, MapPin, ShieldCheck, Sparkles } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Banknote, BarChart3, CheckCircle2, Clock3, Database, Home, Loader2, MapPin, ShieldCheck, Sparkles } from 'lucide-react';
 
 const initialForm = {
   address: '742 Magnolia Ave, Tampa, FL',
@@ -33,6 +33,36 @@ const numericFields = new Set([
 ]);
 const apiBases = ['', 'http://localhost:5001', 'http://localhost:5002', 'http://localhost:5003'];
 
+async function apiRequest(path, options) {
+  let lastError;
+
+  for (const baseUrl of apiBases) {
+    try {
+      const response = await fetch(`${baseUrl}${path}`, options);
+
+      if (response.status === 400) {
+        const details = await response.json();
+        throw new Error(details.errors?.join(' ') || details.message || 'The request is invalid.');
+      }
+
+      if (response.ok) {
+        return response.json();
+      }
+
+      if (response.status === 404) {
+        throw new Error('Saved analysis was not found.');
+      }
+    } catch (requestError) {
+      lastError = requestError;
+      if (requestError.message !== 'Failed to fetch') {
+        break;
+      }
+    }
+  }
+
+  throw lastError || new Error('The analysis service is unavailable.');
+}
+
 function Field({ label, children }) {
   return (
     <label className="field">
@@ -57,8 +87,13 @@ function Metric({ icon: Icon, label, value, tone = 'neutral' }) {
 function App() {
   const [form, setForm] = useState(initialForm);
   const [result, setResult] = useState(null);
+  const [properties, setProperties] = useState([]);
+  const [selectedPropertyId, setSelectedPropertyId] = useState('');
+  const [propertyHistory, setPropertyHistory] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [error, setError] = useState('');
+  const [historyError, setHistoryError] = useState('');
 
   const equityPercent = useMemo(() => {
     const price = Number(form.purchasePrice) || 1;
@@ -73,47 +108,74 @@ function App() {
     }));
   };
 
+  const loadProperties = async () => {
+    try {
+      setHistoryError('');
+      const data = await apiRequest('/api/properties');
+      setProperties(data.properties || []);
+    } catch (historyRequestError) {
+      setHistoryError(historyRequestError.message);
+    }
+  };
+
+  const loadPropertyHistory = async (propertyId) => {
+    if (!propertyId) {
+      setPropertyHistory([]);
+      return;
+    }
+
+    setHistoryLoading(true);
+    try {
+      setHistoryError('');
+      const data = await apiRequest(`/api/properties/${propertyId}/analysis-history`);
+      setPropertyHistory(data.analyses || []);
+    } catch (historyRequestError) {
+      setHistoryError(historyRequestError.message);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadProperties();
+  }, []);
+
+  useEffect(() => {
+    loadPropertyHistory(selectedPropertyId);
+  }, [selectedPropertyId]);
+
   const analyze = async (event) => {
     event.preventDefault();
     setLoading(true);
     setError('');
 
     try {
-      let analysis;
-      let lastError;
-
-      for (const baseUrl of apiBases) {
-        try {
-          const response = await fetch(`${baseUrl}/api/analyze-property`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(form)
-          });
-
-          if (response.status === 400) {
-            const details = await response.json();
-            lastError = new Error(details.errors?.join(' ') || details.message || 'The analysis request is invalid.');
-            break;
-          }
-
-          if (response.ok) {
-            analysis = await response.json();
-            break;
-          }
-        } catch (requestError) {
-          lastError = requestError;
-        }
-      }
-
-      if (!analysis) {
-        throw lastError || new Error('The analysis service is unavailable.');
-      }
-
+      const analysis = await apiRequest('/api/analyze-property', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form)
+      });
       setResult(analysis);
+      setSelectedPropertyId(String(analysis.propertyId || ''));
+      await loadProperties();
     } catch (analysisError) {
       setError(analysisError.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const selectSavedAnalysis = async (analysisId) => {
+    setHistoryLoading(true);
+    try {
+      setHistoryError('');
+      const savedAnalysis = await apiRequest(`/api/analysis-history/${analysisId}`);
+      setForm((current) => ({ ...current, ...savedAnalysis.inputSnapshot }));
+      setResult(savedAnalysis);
+    } catch (historyRequestError) {
+      setHistoryError(historyRequestError.message);
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -239,6 +301,14 @@ function App() {
                 </div>
               </div>
 
+              {(result.propertyId || result.analysisId || result.recommendationId) && (
+                <dl className="result-meta">
+                  <div><dt>Property ID</dt><dd>{result.propertyId}</dd></div>
+                  <div><dt>Analysis ID</dt><dd>{result.analysisId}</dd></div>
+                  <div><dt>Recommendation ID</dt><dd>{result.recommendationId}</dd></div>
+                </dl>
+              )}
+
               <div className="metrics-grid">
                 <Metric icon={Banknote} label="Monthly cash flow" value={currency.format(result.metrics.monthlyCashFlow)} tone={result.metrics.monthlyCashFlow >= 0 ? 'good' : 'bad'} />
                 <Metric icon={BarChart3} label="Cash-on-cash" value={`${result.metrics.cashOnCashReturn}%`} />
@@ -260,6 +330,52 @@ function App() {
             </div>
           )}
         </aside>
+
+        <section className="history-panel" aria-label="Recent analysis history">
+          <div className="section-heading">
+            <Clock3 size={22} />
+            <div>
+              <h2>Recent History</h2>
+              <p>Reload saved properties and prior underwriting runs.</p>
+            </div>
+          </div>
+
+          <div className="history-controls">
+            <Field label="Saved property">
+              <select value={selectedPropertyId} onChange={(event) => setSelectedPropertyId(event.target.value)}>
+                <option value="">Choose a saved property</option>
+                {properties.map((property) => (
+                  <option key={property.id} value={property.id}>
+                    {property.address} - {property.propertyType}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <button className="secondary-action" type="button" onClick={loadProperties} disabled={historyLoading}>
+              {historyLoading ? <Loader2 className="spin" size={16} /> : <Database size={16} />}
+              Refresh
+            </button>
+          </div>
+
+          {historyError && <p className="error"><AlertTriangle size={16} /> {historyError}</p>}
+
+          <div className="history-list">
+            {propertyHistory.length === 0 && !historyLoading ? (
+              <p className="muted">Saved analyses will appear here after a property is selected.</p>
+            ) : propertyHistory.map((analysis) => (
+              <button
+                className="history-item"
+                key={analysis.id}
+                type="button"
+                onClick={() => selectSavedAnalysis(analysis.id)}
+              >
+                <span>{new Date(analysis.createdAt).toLocaleString()}</span>
+                <strong>{analysis.recommendation} - {analysis.score}/100</strong>
+                <small>Analysis #{analysis.id}</small>
+              </button>
+            ))}
+          </div>
+        </section>
       </section>
     </main>
   );

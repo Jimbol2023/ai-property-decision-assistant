@@ -9,6 +9,8 @@ This tool is for early investment screening. It is not financial, legal, tax, or
 ## Features
 
 - Property input workflow for price, estimated value, rent, expenses, financing, repairs, vacancy, neighborhood strength, risk tolerance, and investment goal.
+- PostgreSQL persistence for saved property records, recommendations, and analysis history.
+- Recent history workflow for reloading saved analyses and restoring prior input snapshots.
 - Decision score with Strong Buy, Watch Closely, or Pass guidance.
 - Cash flow, cap rate, cash-on-cash return, mortgage estimate, risk notes, and next steps.
 - Server-side validation rejects unsafe or impossible deal assumptions with a clear 400 response.
@@ -26,6 +28,8 @@ ai-property-decision-assistant/
 |   `-- vite.config.js   # Dev server and API proxy config
 |-- server/              # Node + Express backend
 |   |-- controllers/     # Request handlers
+|   |-- db/              # PostgreSQL pool, migrations, and SQL files
+|   |-- repositories/    # Persistence queries for properties and history
 |   |-- routes/          # API route definitions
 |   |-- services/        # Deal scoring, validation, optional AI note
 |   `-- server.js        # Express app startup and port fallback
@@ -34,7 +38,7 @@ ai-property-decision-assistant/
 `-- README.md
 ```
 
-The frontend submits property assumptions to the Express API. The backend validates the request, calculates deal metrics, returns a recommendation, and adds an optional AI memo only when `OPENAI_API_KEY` is configured.
+The frontend submits property assumptions to the Express API. The backend validates the request, calculates deal metrics, adds an optional AI memo only when `OPENAI_API_KEY` is configured, and saves each valid analysis to PostgreSQL. Invalid requests return `400` and are not persisted.
 
 Production uses split hosting:
 
@@ -49,6 +53,7 @@ Requirements:
 
 - Node.js 18 or newer
 - npm
+- PostgreSQL database reachable by `DATABASE_URL`
 
 Install dependencies:
 
@@ -68,11 +73,18 @@ Example environment values:
 ```bash
 PORT=5000
 CLIENT_ORIGIN=http://localhost:5173
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/ai_property_decision_assistant
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4.1-mini
 ```
 
-The app works without `OPENAI_API_KEY`; the server returns local deterministic analysis plus a note explaining that AI enhancement is disabled.
+The app works without `OPENAI_API_KEY`; the server returns local deterministic analysis plus a note explaining that AI enhancement is disabled. PostgreSQL is required for saved analyses because every valid analysis is persisted.
+
+Run database migrations after configuring `DATABASE_URL`:
+
+```bash
+npm --prefix server run db:migrate
+```
 
 ## Usage
 
@@ -93,12 +105,16 @@ npm run dev        # server and client together
 npm run build      # build the React client
 npm run start      # start the Express API only
 npm run test       # run server unit tests
+npm --prefix server run db:migrate  # apply PostgreSQL migrations
 ```
 
 API endpoints:
 
 - `GET /api/health` returns service status.
-- `POST /api/analyze-property` returns score, recommendation, metrics, risks, next steps, and optional AI note.
+- `POST /api/analyze-property` returns score, recommendation, metrics, risks, next steps, optional AI note, and saved record IDs.
+- `GET /api/properties` returns saved property records with their latest recommendation summary.
+- `GET /api/properties/:propertyId/analysis-history` returns saved analyses for one property in chronological history order.
+- `GET /api/analysis-history/:analysisId` returns one saved result and its original input snapshot.
 
 Example analysis request:
 
@@ -122,6 +138,14 @@ Example analysis request:
 ```
 
 Numeric deal inputs are validated before analysis. Invalid, missing, `NaN`, `Infinity`, negative, out-of-range, or impossible values return a clear `400` response instead of producing unsafe metrics.
+
+Valid analysis requests are saved in three PostgreSQL-backed records:
+
+- `properties` stores one deduplicated property per normalized address and property type, along with the latest editable assumptions.
+- `analysis_history` stores every full input snapshot plus metrics, risks, and next steps.
+- `recommendations` stores the recommendation, score, summary, and AI note linked to one analysis.
+
+This improves the project by turning a one-off underwriting calculator into a repeatable decision system: investors can revisit saved deals, compare prior analysis runs, and restore assumptions without retyping them.
 
 ## Screenshot Section
 
@@ -147,7 +171,6 @@ screenshots/
 
 ## Future Improvements
 
-- Save property analyses to a database.
 - Add user accounts and saved deal history.
 - Add downloadable PDF investment summaries.
 - Compare multiple properties side by side.
