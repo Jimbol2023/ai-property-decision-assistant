@@ -125,12 +125,16 @@ Numeric deal inputs are validated before analysis. Invalid, missing, `NaN`, `Inf
 
 ## Screenshot Section
 
-<p>
-  <img src="./screenshots/app-home.png" alt="AI Property Decision Assistant home screen" width="720">
-</p>
+### Home and Property Inputs
 
 <p>
-  <img src="./screenshots/results-view.png" alt="AI Property Decision Assistant analyzed results view" width="720">
+  <img src="./screenshots/app-home.png" alt="AI Property Decision Assistant home screen with hero, property inputs, and decision brief" width="720">
+</p>
+
+### Completed Analysis Results
+
+<p>
+  <img src="./screenshots/results-view.png" alt="AI Property Decision Assistant completed property analysis with score, metrics, risks, and next steps" width="720">
 </p>
 
 Screenshots are stored in the `screenshots/` folder.
@@ -157,3 +161,4 @@ This project is inspired by the idea of a J Capital-style property decision syst
 ## Author
 
 Olabode Moses Jimoh
+
