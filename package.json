@@ -1,0 +1,18 @@
+{
+  "name": "ai-property-decision-assistant",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI-assisted property investment decision tool with a React + Vite client and Node + Express API.",
+  "scripts": {
+    "install:all": "npm --prefix client install && npm --prefix server install",
+    "dev": "concurrently \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
+    "dev:client": "npm --prefix client run dev",
+    "dev:server": "npm --prefix server run dev",
+    "build": "npm --prefix client run build",
+    "start": "npm --prefix server start",
+    "test": "npm --prefix server test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
